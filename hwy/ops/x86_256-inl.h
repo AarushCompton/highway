@@ -4028,6 +4028,80 @@ HWY_API Vec128<uint8_t, 8> U8FromU32(const Vec256<uint32_t> v) {
   return BitCast(Full64<uint8_t>(), pair);
 }
 
+// ------------------------------ Truncations
+
+HWY_API Vec128<uint8_t, 4> TruncateTo(Simd<uint8_t, 4, 0> /* tag */,
+                                      const Vec256<uint64_t> v) {
+  const Full256<uint8_t> d8;
+  const Full256<uint32_t> d32;
+  alignas(32) constexpr uint32_t kEven[8] = {0, 2, 4, 6, 0, 2, 4, 6};
+  const auto v32 =
+      TableLookupLanes(BitCast(d32, v), SetTableIndices(d32, kEven));
+
+  constexpr uint32_t k8From32 = 0x0C080400u;
+  alignas(32) static constexpr uint32_t kMap[8] = {
+      k8From32, k8From32, k8From32, k8From32, ~0u, ~0u, ~0u, ~0u};
+  const auto quad = TableLookupBytes(v32, Load(d32, kMap));
+  return LowerHalf(LowerHalf(LowerHalf(BitCast(d8, quad))));
+}
+
+HWY_API Vec128<uint16_t, 4> TruncateTo(Simd<uint16_t, 4, 0> /* tag */,
+                                       const Vec256<uint64_t> v) {
+  const Full256<uint16_t> d16;
+  const Full256<uint32_t> d32;
+  alignas(32) constexpr uint32_t kEven[8] = {0, 2, 4, 6, 0, 2, 4, 6};
+  const auto v32 =
+      TableLookupLanes(BitCast(d32, v), SetTableIndices(d32, kEven));
+
+  alignas(32) static constexpr uint32_t kMap[8] = {
+      0x5040100u, 0xD0C0908, 0x5040100u, 0xD0C0908, ~0u, ~0u, ~0u, ~0u};
+  const auto quad = TableLookupBytes(v32, Load(d32, kMap));
+  return LowerHalf(LowerHalf(BitCast(d16, quad)));
+}
+
+HWY_API Vec128<uint32_t, 4> TruncateTo(Simd<uint32_t, 4, 0> /* tag */,
+                                       const Vec256<uint64_t> v) {
+  const Full256<uint32_t> d32;
+  alignas(32) constexpr uint32_t kEven[8] = {0, 2, 4, 6, 0, 2, 4, 6};
+  return LowerHalf(
+      TableLookupLanes(BitCast(d32, v), SetTableIndices(d32, kEven)));
+}
+
+HWY_API Vec128<uint8_t, 8> TruncateTo(Simd<uint8_t, 8, 0> d,
+                                      const Vec256<uint32_t> v) {
+  const Full256<uint32_t> d32;
+  constexpr uint32_t k8From32 = 0x0C080400u;
+  alignas(32) static constexpr uint32_t kMap[8] = {
+      k8From32, ~0u, k8From32, ~0u, ~0u, 0x0C080400u, ~0u, k8From32};
+  // Place first four bytes in lo[0], remaining 4 in hi[1].
+  const auto quad = TableLookupBytes(v, Load(d32, kMap));
+  // Interleave both quadruplets - OR instead of unpack reduces port5 pressure.
+  const auto lo = LowerHalf(quad);
+  const auto hi = UpperHalf(Full128<uint32_t>(), quad);
+  const auto pair = LowerHalf(lo | hi);
+  return BitCast(d, pair);
+}
+
+HWY_API Vec128<uint16_t, 8> TruncateTo(Simd<uint16_t, 8, 0> /* tag */,
+                                       const Vec256<uint32_t> v) {
+  const Full256<uint32_t> d32;
+  alignas(32) static constexpr uint32_t kMap[8] = {
+      0x05040100, 0x0D0C0908, ~0u, ~0u, 0x05040100, 0x0D0C0908, ~0u, ~0u};
+  const auto quad = TableLookupBytes(v, Load(d32, kMap));
+  const Vec256<uint16_t> pair{_mm256_permute4x64_epi64(quad.raw, 0x88)};
+  return LowerHalf(pair);
+}
+
+HWY_API Vec128<uint8_t, 16> TruncateTo(Simd<uint8_t, 16, 0> /* tag */,
+                                       const Vec256<uint16_t> v) {
+  const Full256<uint32_t> d32;
+  alignas(32) static constexpr uint32_t kMap[8] = {
+      0x06040200, 0x0E0C0A08, ~0u, ~0u, 0x06040200, 0x0E0C0A08, ~0u, ~0u};
+  const auto quad = TableLookupBytes(v, Load(d32, kMap));
+  const Vec256<uint8_t> pair{_mm256_permute4x64_epi64(quad.raw, 0x88)};
+  return LowerHalf(pair);
+}
+
 // ------------------------------ Integer <=> fp (ShiftRight, OddEven)
 
 HWY_API Vec256<float> ConvertTo(Full256<float> /* tag */,
